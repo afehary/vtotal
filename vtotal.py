@@ -4,61 +4,47 @@ from portscanner import validate_ip
 from utils import timefunc
 
 # Replace the API key with an environment variable for security (recommended)
-keys = "57e3ad8188a5a8581df9deacf2824f8082938b3ff9a6f90d819595ea0f0e0fb5"
+keys = "2f40b4e74c499802a15cadcc3a420218f955588932455226e6641d29f0e8720e"
 
 urls = "https://www.virustotal.com/api/v3/"
 
 @timefunc
 def analyze(response):
     while True:
-        response_json = response.json()
-        attributes = response_json.get("data", {}).get("attributes", {}).get("last_analysis_stats", None)
-        if not attributes:
-            analysis_id = response.json()["data"]["id"]
-            url = f"{urls}analyses/{analysis_id}"
+        analysis_id = response.json()["data"]["id"]
+        url = f"{urls}analyses/{analysis_id}"
 
-            headers = { 
-                "accept" : "application/json",
-                "x-apikey": keys
-            }
+        headers = { 
+            "accept" : "application/json",
+            "x-apikey": keys
+        }
 
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200:
-                json_response = response.json()
-                status = json_response["data"]["attributes"]["status"]
-                stats = json_response["data"]["attributes"]["stats"]
-                if status == "completed":
-                    attributes = True
-                    break
-                elif status == "in-progress" or status == "queued":
-                    print(f"Status: {status}. Waiting for analysis to complete...")
-                    time.sleep(10)
-                else:
-                    print(f"Analysis failed with status: {status}")
-                    break
+        response = requests.get(url, headers=headers)
 
-            else:
-                print(f"Failed: {url} {response.status_code} - {response.text}")
+        if response.status_code == 200:
+            json_response = response.json()
+            status = json_response["data"]["attributes"]["status"]
+            stats = json_response["data"]["attributes"]["stats"]
+
+            if status == "completed":
+                print(f"Status: {status}")
+                print(f"Harmless: {stats.get('harmless', 0)}")
+                print(f"Malicious: {stats.get('malicious', 0)}")
+                print(f"Suspicious: {stats.get('suspicious', 0)}")
+                print(f"Undetected: {stats.get('undetected', 0)}")
+                print(f"Timeout: {stats.get('timeout', 0)}")
                 break
-
-
-        elif attributes:
-            status = "completed"
-            stats = json_response["data"]["attributes"]["last_analysis_stats"]
-
-            print(f"Status: {status}")
-            print(f"Harmless: {stats.get('harmless', 0)}")
-            print(f"Malicious: {stats.get('malicious', 0)}")
-            print(f"Suspicious: {stats.get('suspicious', 0)}")
-            print(f"Undetected: {stats.get('undetected', 0)}")
-            print(f"Timeout: {stats.get('timeout', 0)}")
-            break
+            elif status == "in-progress" or status == "queued":
+                print(f"Status: {status}. Waiting for analysis to complete...")
+                time.sleep(10)
+            else:
+                print(f"Analysis failed with status: {status}")
+                break
         else:
             print(f"Failed: {url} {response.status_code} - {response.text}")
             break
 
 def scan_file():
-    
     file_path = input("Enter the file path: ")
     url = f"{urls}files"
     files = {"file": open(file_path, "rb")}
