@@ -10,39 +10,65 @@ urls = "https://www.virustotal.com/api/v3/"
 
 @timefunc
 def analyze(response):
+    """
+    General function to print a clear, formatted report for VirusTotal analyses.
+    Automatically determines the type of resource being analyzed based on the response.
+    :param response_json: dict - The JSON response from the VirusTotal API
+    """
+
+    analysis_id = None
+    stats = None
+
+    # Check if the response requires polling (e.g., files and URLs) or is immediate (e.g., IPs, domains, etc.)
+    if "data" in response and "id" in response["data"]:
+        analysis_id = response["data"]["id"]
+    else:
+        # Immediate analysis result, we can extract stats directly
+        stats = response.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+
+    headers = {
+        "x-apikey": keys,
+        "accept": "application/json"
+    }
+
+    # Use the same loop to handle polling and immediate results
     while True:
-        analysis_id = response.json()["data"]["id"]
-        url = f"{urls}analyses/{analysis_id}"
+        if analysis_id:
+            # Polling case: Request the analysis status using the analysis_id
+            status_url = f"{urls}analyses/{analysis_id}"
+            status_response = requests.get(status_url, headers=headers)
 
-        headers = { 
-            "accept" : "application/json",
-            "x-apikey": keys
-        }
+            if status_response.status_code == 200:
+                status_json = status_response.json()
+                status = status_json["data"]["attributes"]["status"]
+                stats = status_json["data"]["attributes"].get("stats", {})
 
-        response = requests.get(url, headers=headers)
-
-        if response.status_code == 200:
-            json_response = response.json()
-            status = json_response["data"]["attributes"]["status"]
-            stats = json_response["data"]["attributes"]["stats"]
-
-            if status == "completed":
-                print(f"Status: {status}")
-                print(f"Harmless: {stats.get('harmless', 0)}")
-                print(f"Malicious: {stats.get('malicious', 0)}")
-                print(f"Suspicious: {stats.get('suspicious', 0)}")
-                print(f"Undetected: {stats.get('undetected', 0)}")
-                print(f"Timeout: {stats.get('timeout', 0)}")
-                break
-            elif status == "in-progress" or status == "queued":
-                print(f"Status: {status}. Waiting for analysis to complete...")
-                time.sleep(10)
+                if status == "completed":
+                    break  # Analysis is completed, we can print the stats
+                elif status == "queued" or status == "in-progress":
+                    print(f"Status: {status}. Waiting for analysis to complete...")
+                    time.sleep(10)
+                else:
+                    print(f"Analysis failed with status: {status}")
+                    return  # Exit the function if the analysis fails
             else:
-                print(f"Analysis failed with status: {status}")
-                break
+                print(f"Error fetching analysis: {status_response.status_code} - {status_response.text}")
+                return  # Exit the function if there's an error fetching the status
         else:
-            print(f"Failed: {url} {response.status_code} - {response.text}")
+            # Immediate result case (IPs, domains, etc.), break the loop to print stats
             break
+
+    # Print the stats in a unified format
+    if stats:
+        print(f"\n==== Analysis Report ====")
+        print(f"Harmless: {stats.get('harmless', 0)}")
+        print(f"Malicious: {stats.get('malicious', 0)}")
+        print(f"Suspicious: {stats.get('suspicious', 0)}")
+        print(f"Undetected: {stats.get('undetected', 0)}")
+        print(f"Timeout: {stats.get('timeout', 0)}")
+        print("=" * 40)
+    else:
+        print("No last_analysis_stats available in the response.")
 
 def scan_file():
     file_path = input("Enter the file path: ")
@@ -55,6 +81,7 @@ def scan_file():
 
     response = requests.post(url, files=files, headers=headers)
     if response.status_code == 200:
+        response = response.json()
         return analyze(response)
     else:
         print('Error: ', response.text)
@@ -71,6 +98,7 @@ def scan_url():
 
     response = requests.post(url, data=payload, headers=headers)
     if response.status_code == 200:
+        response = response.json()
         return analyze(response)
     else:
         print('Error: ', response.text)
@@ -96,6 +124,7 @@ def get_file_report():
 
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
+        response = response.json()
         return analyze(response)
     else:
         print('Error: ', response.text)
@@ -112,6 +141,7 @@ def get_url_report():
 
     response = requests.post(url, data=payload, headers=headers)
     if response.status_code == 200:
+        response = response.json()
         return analyze(response)
     else:
         print('Error: ', response.text)
@@ -124,6 +154,7 @@ def get_domain_report():
         response = requests.get(url, headers=headers)
 
         if response.status_code == 200:
+             response = response.json()
              analyze(response)
         else:
             print('An error: ', response.text)
@@ -138,6 +169,7 @@ def get_ip_report():
 
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
+            response = response.json()
             analyze(response)
         else:
             print(f'An error: {ip}', response.text)
