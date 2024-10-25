@@ -12,8 +12,8 @@ urls = "https://www.virustotal.com/api/v3/"
 def analyze(response):
     while True:
         response_json = response.json()
-        attributes = response_json.get("data", {}).get("attributes", {}).get("last_analysis_stats", None)
-        if not attributes:
+        stats = response_json.get("data", {}).get("attributes", {}).get("last_analysis_stats", None)
+        if not stats:
             analysis_id = response.json()["data"]["id"]
             url = f"{urls}analyses/{analysis_id}"
 
@@ -28,10 +28,12 @@ def analyze(response):
                 status = json_response["data"]["attributes"]["status"]
                 stats = json_response["data"]["attributes"]["stats"]
                 if status == "completed":
-                    attributes = True
-                    break
+                    pass
+
                 elif status == "in-progress" or status == "queued":
                     print(f"Status: {status}. Waiting for analysis to complete...")
+                    json_response = response.json()
+                    stats = json_response["data"]["attributes"]["stats"]
                     time.sleep(10)
                 else:
                     print(f"Analysis failed with status: {status}")
@@ -41,11 +43,8 @@ def analyze(response):
                 print(f"Failed: {url} {response.status_code} - {response.text}")
                 break
 
-
-        elif attributes:
+        if stats:
             status = "completed"
-            stats = json_response["data"]["attributes"]["last_analysis_stats"]
-
             print(f"Status: {status}")
             print(f"Harmless: {stats.get('harmless', 0)}")
             print(f"Malicious: {stats.get('malicious', 0)}")
